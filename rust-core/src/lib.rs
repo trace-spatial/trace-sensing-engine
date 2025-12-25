@@ -31,6 +31,7 @@
 pub mod types;
 pub mod signal;
 pub mod orientation;
+pub mod segmentation;
 
 // Re-export commonly used types
 pub use types::{
@@ -41,4 +42,6 @@ pub use types::{
 pub use signal::{FilterConfig, GravityEstimator, SignalProcessor, ProcessedSample};
 
 pub use orientation::{Quaternion, OrientationConfig, OrientationEstimator};
+
+pub use segmentation::{SegmentationConfig, SegmentationEngine, SegmentClassification};
 
