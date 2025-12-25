@@ -1,0 +1,16 @@
+[package]
+name = "trace_sensing"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "trace_sensing"
+path = "src/main.rs"
+
+[lib]
+name = "trace_sensing"
+path = "src/lib.rs"
+
+[dependencies]
+
+[dev-dependencies]
