@@ -33,6 +33,7 @@ pub mod signal;
 pub mod orientation;
 pub mod segmentation;
 pub mod transitions;
+pub mod pipeline;
 
 // Re-export commonly used types
 pub use types::{
@@ -47,4 +48,6 @@ pub use orientation::{Quaternion, OrientationConfig, OrientationEstimator};
 pub use segmentation::{SegmentationConfig, SegmentationEngine, SegmentClassification};
 
 pub use transitions::{TransitionDetector, TransitionEvent, TransitionConfig};
+
+pub use pipeline::{MotionEvidencePipeline, PipelineConfig};
 
