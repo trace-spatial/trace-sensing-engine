@@ -34,6 +34,7 @@ pub mod orientation;
 pub mod segmentation;
 pub mod transitions;
 pub mod pipeline;
+pub mod battery_optimized;
 
 #[cfg(test)]
 mod integration_tests;
@@ -56,4 +57,6 @@ pub use segmentation::{SegmentationConfig, SegmentationEngine, SegmentClassifica
 pub use transitions::{TransitionDetector, TransitionEvent, TransitionConfig};
 
 pub use pipeline::{MotionEvidencePipeline, PipelineConfig};
+
+pub use battery_optimized::{BatteryOptimizedEngine, BatteryMetrics, SamplingMode};
 
