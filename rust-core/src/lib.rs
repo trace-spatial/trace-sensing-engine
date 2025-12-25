@@ -19,24 +19,23 @@
 //!
 //! ```ignore
 //! use trace_sensing::types::{ImuSample, MotionEvidenceWindow, MotionMode, SensorHealth};
+//! use trace_sensing::signal::SignalProcessor;
 //!
-//! // Create a motion evidence window
-//! let mut window = MotionEvidenceWindow::new(
-//!     1,
-//!     0,
-//!     5000,
-//!     MotionMode::SteadyMotion,
-//!     SensorHealth::Nominal,
-//!     1,
-//! );
+//! let mut processor = SignalProcessor::new();
 //!
-//! // The window can now have segments and transitions added to it
+//! // Process a raw IMU sample
+//! let sample = ImuSample::new(1000, [0.0, 0.0, -9.81], [0.0, 0.0, 0.0]);
+//! let processed = processor.process_sample(&sample);
 //! ```
 
 pub mod types;
+pub mod signal;
 
 // Re-export commonly used types
 pub use types::{
     DurationBucket, ImuSample, MotionEvidenceWindow, MotionMode, MotionSegment, SensorHealth,
     TransitionCandidate, TransitionType, ValidityState,
 };
+
+pub use signal::{FilterConfig, GravityEstimator, SignalProcessor, ProcessedSample};
+
