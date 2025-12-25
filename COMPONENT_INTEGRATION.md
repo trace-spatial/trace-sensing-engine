@@ -1,26 +1,24 @@
 # Integration with Trace Components
 
-How to wire sensing engine into Zone Mapper, CEBE-X, and Confidential Computing.
+How to connect the sensing engine with Zone Mapper, CEBE-X, and Confidential Computing.
 
 ---
 
 ## Zone Mapper Integration
 
-**What Zone Mapper needs from sensing engine:**
-- Motion transition events (START/STOP/TURN/HESITATION)
-- Zone dwell times
-- Kinematic signatures (step count, turn angle)
+Zone Mapper needs:
+- Motion transition events (START/STOP/TURN)
+- Dwell times
+- Motion signatures
 
 **Implementation:**
 
 ```rust
-// zone_mapper/src/engine_listener.rs
 use trace_sensing::{ImuSample, BatteryOptimizedEngine, PipelineConfig};
 
 pub struct ZoneMapperListener {
     engine: BatteryOptimizedEngine,
     current_zone: Option<ZoneId>,
-    transition_buffer: Vec<TransitionEvent>,
 }
 
 impl ZoneMapperListener {
@@ -28,7 +26,6 @@ impl ZoneMapperListener {
         Self {
             engine: BatteryOptimizedEngine::new(PipelineConfig::default()),
             current_zone: None,
-            transition_buffer: Vec::new(),
         }
     }
 
@@ -36,7 +33,6 @@ impl ZoneMapperListener {
         let sample = ImuSample::new(timestamp_ms, accel, gyro);
 
         if let Some(window) = self.engine.process_sample(sample) {
-            // Extract motion evidence
             self.on_motion_window(&window);
         }
     }
@@ -44,10 +40,10 @@ impl ZoneMapperListener {
     fn on_motion_window(&mut self, window: &MotionEvidenceWindow) {
         // Log segment
         for segment in &window.segments {
-            println!("Zone: {:?} for {:.0}ms", segment.mode, segment.duration_ms);
+            println!("Motion: {:?} for {:.0}ms", segment.mode, segment.duration_ms);
         }
 
-        // Detect transitions - when to scan environment
+        // Detect transitions
         for transition in &window.transitions {
             if matches!(transition.transition_type, 
                 TransitionType::STOP | TransitionType::START | TransitionType::TURN) {

@@ -41,7 +41,7 @@ fn main() {
 
 ## Battery-optimized version (recommended)
 
-Uses adaptive sampling to reduce power consumption by 67%.
+The library includes adaptive sampling that adjusts processing based on motion state.
 
 ```rust
 use trace_sensing::BatteryOptimizedEngine;
@@ -63,10 +63,6 @@ fn main() {
     // Optional: check battery metrics
     let metrics = engine.battery_metrics();
     println!("Daily battery: {:.2}%", metrics.battery_percent());
-    
-    if metrics.within_battery_goal() {
-        println!("✅ Within <1% daily target");
-    }
 }
 ```
 
@@ -244,26 +240,24 @@ println!("Power: {:.1} mW", metrics.power_mw);
 println!("Daily: {:.2} mWh", metrics.daily_mwh());
 println!("Battery impact: {:.2}%", metrics.battery_percent());
 
-// Check against goal
-if metrics.within_battery_goal() {
-    println!("✅ Goal met: <1% daily");
-} else {
-    println!("⚠️ Over budget: {:.2}% daily", metrics.battery_percent());
+// Check metrics
+if metrics.cpu_percent < 5.0 {
+    println!("Low CPU usage");
 }
 ```
 
 ## Sampling modes (with adaptive engine)
 
-The engine automatically selects sampling rates based on motion:
+The engine automatically adjusts sampling rates based on motion:
 
 ```
-Still → 10 Hz   (80% power savings, skip 4 of 5 samples)
-Steady → 25 Hz  (50% power savings, skip 1 of 2 samples)
-Active → 50 Hz  (No skipping, full rate)
-Transition → 100 Hz (High CPU, tracks rapid changes)
+Still → 10 Hz
+Steady → 25 Hz
+Active → 50 Hz
+Transition → 100 Hz
 ```
 
-Switch happens automatically with hysteresis to avoid chatter.
+Mode switching happens automatically with hysteresis to avoid rapid changes.
 
 ## Error handling
 
@@ -298,12 +292,9 @@ match window.validity_state {
 
 ## Performance baseline
 
-- **Per-sample cost**: ~12 microseconds (~0.6ms per 50-sample window)
-- **Memory**: ~8KB constant (no dynamic allocation in hot path)
-- **Battery**: 0.02% baseline engine, 0.7% sensors = 0.72% daily
-- **With adaptive sampling**: 0.24% daily (67% reduction)
-
-Not the bottleneck. Use for what it's designed for.
+- **Per-sample cost**: Microseconds (well below 1ms per window)
+- **Memory**: Fixed small footprint (no dynamic allocation in critical paths)
+- **Power**: Efficient background processing
 
 ---
 

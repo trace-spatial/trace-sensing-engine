@@ -1,52 +1,45 @@
-# Offline Integration: How to Use Engine WITHOUT HTTP
+# Offline Integration: Using the Engine Locally
 
-## Critical Answer: This engine is 100% OFFLINE. No HTTP. No network. No battery drain from requests.
+## Core Point: This library runs on-device, no HTTP, no network calls.
 
-The sensing engine runs entirely on-device, in your app process. It does NOT make HTTP calls. It does NOT use network. It processes IMU data locally and emits motion evidence locally.
-
----
-
-## Architecture: Embedded Library Model
-
-```
-Phone App (React Native)
-    ↓
-Native Module (Swift/Kotlin)
-    ↓ (direct function call, not HTTP)
-    ↓
-Trace Sensing Engine Library (this)
-    ↓ (raw IMU input)
-    ↓
-Raw Sensor Stream (accelerometer + gyroscope)
-```
-
-**No server involved. No HTTP. No requests. Pure local computation.**
+The engine processes IMU data locally in your app. No server involvement. No requests. Just local computation.
 
 ---
 
-## How It Plugs Into Trace Ecosystem
+## How it works
 
-### Layer 1: Capture (Native Module)
+```
+Phone App
+    ↓
+Native Code (Swift/Kotlin)
+    ↓
+Sensing Engine Library (direct function calls)
+    ↓
+Raw IMU Sensors
+```
 
-Your app's native code (Swift/Kotlin) continuously reads IMU at 50Hz:
+Local only. No HTTP involved.
+
+---
+
+## Connecting to Trace
+
+### Reading sensors (native code)
+
+Native code reads accelerometer/gyroscope at 50Hz:
 
 ```swift
-// iOS Swift pseudocode
-import trace_sensing  // Link as local library
+// iOS
+import trace_sensing
 
 let engine = BatteryOptimizedEngine(config: PipelineConfig())
 
-// In sensor callback (50Hz)
 func onIMUData(accel: [Float], gyro: [Float], timestamp: UInt64) {
-    let sample = ImuSample(
-        timestamp_ms: timestamp,
-        accel: accel,
-        gyro: gyro
-    )
+    let sample = ImuSample(timestamp_ms: timestamp, accel: accel, gyro: gyro)
     
     if let window = engine.process_sample(sample) {
-        // Window ready - motion evidence extracted
-        self.sendToZoneMapper(window)
+        // Motion evidence ready
+        sendToZoneMapper(window)
     }
 }
 ```

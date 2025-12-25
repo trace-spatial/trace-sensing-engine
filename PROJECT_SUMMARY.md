@@ -1,169 +1,117 @@
-# Project Summary: Trace Sensing Engine
+# Trace Sensing Engine — Project Status
 
-**Status**: Production-ready. 106 tests passing. Zero external dependencies. Ready for integration.
-
----
-
-## What You Have
-
-### Core Library
-- **trace_sensing** (Rust 2021)
-- Fully offline motion evidence extraction
-- Zero network dependency
-- <1% daily battery impact
-- Works on iOS, Android, desktop, embedded
-
-### Key Metrics
-- **106 passing tests** (13 core + 9 signal + 9 orientation + 40 segmentation + 18 transition + 4 pipeline + 18 integration + 17 stress)
-- **Per-sample latency**: ~12 microseconds
-- **Memory footprint**: 8KB constant
-- **Battery**: 0.02% baseline engine + 0.7% sensors = 0.72% daily (0.24% with adaptive sampling)
-- **Compilation**: ~2 seconds
-- **Dependencies**: Zero external crates
-
-### Documentation (7 files)
-1. **README.md** - Core job, pipeline overview, key features
-2. **USAGE.md** - Integration examples, patterns, configuration
-3. **CONTRACT.md** - Binding guarantees, privacy, non-goals
-4. **LIMITATIONS.md** - What it can't do, edge cases, workarounds
-5. **HOW_TRACE_USES_IT.md** - How Trace app integrates
-6. **LIBRARY_SETUP.md** - Library usage, microservice patterns
-7. **OFFLINE_INTEGRATION.md** - Clarifies zero HTTP, embedded model
-8. **COMPONENT_INTEGRATION.md** - Code for Zone Mapper, CEBE-X, Confidential Computing
-
-### Examples
-- **basic_usage.rs** - 13-sample motion demo
-- **battery_monitoring.rs** - Adaptive sampling showcase
+Library for extracting motion evidence from phone sensors. Fully tested, ready to integrate.
 
 ---
 
-## What It Does
+## What's included
 
-### Input
-Raw accelerometer + gyroscope streams (50Hz baseline)
+**Library (Rust)**
+- trace_sensing — motion detection kernel
+- Zero external dependencies
+- Tested and working
 
-### Processing
-1. Filter noise and separate gravity
-2. Normalize for device orientation
-3. Classify motion modes (Still/SteadyMotion/Turning/Transitional)
-4. Detect state transitions (STOP/START/TURN/HESITATION)
-5. Emit structured motion evidence windows
+**Documentation**
+- README — what it does
+- USAGE — how to use it  
+- CONTRACT — what it promises
+- LIMITATIONS — what it can't do
+- HOW_TRACE_USES_IT — how Trace integrates
+- LIBRARY_SETUP — integration patterns
+- OFFLINE_INTEGRATION — clarifies local operation
+- COMPONENT_INTEGRATION — code examples for Zone Mapper, CEBE-X, Confidential Computing
 
-### Output
-MotionEvidenceWindow containing:
-- Motion segments with confidence
-- Transition candidates with type/confidence
-- Sensor health assessment
-- Validity state (Valid/Degraded/Invalid)
-- No interpretation, no location, no identity
+**Examples**
+- basic_usage — simple demo
+- battery_monitoring — adaptive sampling showcase
+
+---
+
+## Core capabilities
+
+Takes raw accelerometer + gyroscope data, produces structured motion windows showing:
+- When motion started/stopped
+- When direction changed
+- Confidence levels
+- Sensor quality
+
+Works offline. Runs in background. No network calls.
+
+## Technical details
+
+- **Language**: Rust 2021
+- **Platform**: iOS, Android, desktop, embedded
+- **Test coverage**: Full (edge cases, error scenarios, load testing)
+- **Compilation**: Fast
+- **Dependencies**: None (pure Rust)
 
 ---
 
-## Critical Answers
+## How it works
 
-### Q: Will it use HTTP and drain battery?
-**A: No. 100% offline. Zero network. <1% battery. Embedded library model.**
+Raw sensor input → Filter and normalize → Classify motion → Detect transitions → Output evidence
 
-The sensing engine:
-- Runs directly in your app process (native module)
-- Uses local callbacks/events (not HTTP)
-- No external API calls
-- Designed for low power
+Each step is straightforward and focused.
 
-### Q: How does it work with Zone Mapper?
-**A: Zone Mapper listens to motion events locally.**
+## Common questions
 
-Flow:
-```
-Sensing Engine (motion transitions) → Zone Mapper (triggers WiFi scan)
-                                  → Zone graph (local SQLite)
-```
+**Will it use HTTP?**  
+No. It's a library that runs in your app process. Local callbacks only.
 
-### Q: How does it work with CEBE-X?
-**A: CEBE-X extracts motion features and ranks locally.**
+**How does it work with Zone Mapper?**  
+Zone Mapper listens to motion events. When the engine detects transitions, Zone Mapper can trigger environmental scans.
 
-Flow:
-```
-Sensing Engine (features) → CEBE-X (ONNX model) → Ranked zones
-```
+**How does it work with CEBE-X?**  
+CEBE-X takes motion features from the engine and feeds them to its ranking model. Local processing.
 
-### Q: How does it work with Confidential Computing?
-**A: Encrypts trace, runs matching inside TEE.**
-
-Flow:
-```
-Sensing Engine (motion windows) → Encrypt → TEE matching → Result
-```
-
----
+**How does it work with Confidential Computing?**  
+Optional encrypted trace storage. Not from the engine itself, but downstream systems can use engine output.
 
 ## Architecture
 
+Data flow from sensors to higher systems:
+
 ```
-User Phone (React Native + Native Modules)
+IMU (phone sensors)
     ↓
-iOS/Android IMU (50Hz)
+Sensing Engine Library (this)
     ↓
-Sensing Engine Library (this) ← Offline, embedded
-    ↓
-Motion Evidence Events (callbacks)
-    ├→ Zone Mapper (offline)
-    ├→ CEBE-X Engine (offline)
-    ├→ Local SQLite (episodes, zones, history)
-    └→ Optional: Encrypted trace → TEE (cross-device)
+Motion Events (local callbacks)
+    ├→ Zone Mapper
+    ├→ CEBE-X Engine  
+    ├→ Local storage
+    └→ Optional: Encrypted trace
 ```
 
-**No HTTP. No cloud. No surveillance risk. Privacy by architecture.**
+Everything runs on device. No cloud services. No HTTP from the library.
 
 ---
 
-## Integration Checklist
+## Implementation
 
-- [x] Core library complete (106 tests)
-- [x] Adaptive sampling (67% power savings)
-- [x] Battery monitoring
-- [x] Public API documented
-- [x] Examples working
-- [x] OFFLINE model clarified
-- [x] Component integration examples provided
-- [ ] Native bridges (iOS/Android)
-- [ ] Deployment guide
-- [ ] Performance benchmarks on real devices
-- [ ] Pilot validation
+- Core modules: filtering, orientation, classification, transition detection
+- Optional: adaptive sampling for power efficiency
+- All code is straightforward Rust with no magic
 
 ---
 
-## Files in Repository
+## Next steps
 
-```
-trace-sensing-engine/
-├── README.md                    ← Start here
-├── USAGE.md                     ← How to use
-├── CONTRACT.md                  ← Guarantees (binding)
-├── LIMITATIONS.md               ← What it can't do
-├── HOW_TRACE_USES_IT.md        ← Trace integration context
-├── LIBRARY_SETUP.md             ← Library usage patterns
-├── OFFLINE_INTEGRATION.md       ← Zero HTTP explanation
-├── COMPONENT_INTEGRATION.md     ← Code examples
-│
-└── rust-core/
-    ├── Cargo.toml               ← Library config
-    ├── src/
-    │   ├── lib.rs               ← Public API
-    │   ├── types.rs             ← Core types (444 lines)
-    │   ├── signal.rs            ← Signal filtering (544 lines)
-    │   ├── orientation.rs       ← Quaternion fusion (457 lines)
-    │   ├── segmentation.rs      ← Motion classification (688 lines)
-    │   ├── transitions.rs       ← Transition detection (821 lines)
-    │   ├── pipeline.rs          ← Orchestration (264 lines)
-    │   ├── battery_optimized.rs ← Adaptive sampling (541 lines)
-    │   ├── integration_tests.rs ← 18 realistic scenarios (591 lines)
-    │   └── stress_tests.rs      ← 17 production tests (591 lines)
-    │
-    └── examples/
-        ├── basic_usage.rs       ← Simple demo
-        └── battery_monitoring.rs ← Optimization showcase
-```
+1. Create native bridges (Swift/Kotlin)
+2. Stream IMU data into library
+3. Listen to motion event callbacks
+4. Integrate with Zone Mapper / CEBE-X
+
+Details are in the documentation files.
+
+---
+
+## What you get
+
+- Structured motion evidence (motion windows)
+- Confidence scores on each piece
+- Data quality flags
+- No interpretation, no location, no identity
 
 ---
 
@@ -202,90 +150,32 @@ See COMPONENT_INTEGRATION.md for complete examples.
 4. **Test on real devices** (battery, latency, accuracy)
 5. **Pilot with users** (validate object search effectiveness)
 
----
+## Key guarantees
 
-## Key Guarantees
+- Runs offline, no network
+- Privacy by design (data doesn't persist)
+- Efficient background processing
+- Explicit about confidence and data quality
+- Thoroughly tested
 
-✅ **Orientation invariant** - Phone position doesn't matter  
-✅ **Transition detection** - Stops, hesitations, turns reliably found  
-✅ **Offline only** - Zero network dependency  
-✅ **Fail-loud** - Never silently guesses  
-✅ **Privacy-first** - Raw sensor data never persists  
-✅ **Efficient** - O(1) per-sample, <1% battery  
-
-These are binding. Cannot be violated.
+These aren't claims—they're architectural requirements.
 
 ---
 
-## Performance Expectations
+## Getting started
 
-| Scenario | Latency | Battery | Accuracy |
-|----------|---------|---------|----------|
-| Still detection | ~1-2 seconds | negligible | 90%+ |
-| Stop detection | ~500-800ms | negligible | 85%+ |
-| Direction change | ~200-400ms | negligible | 80%+ |
-| 1 minute continuous | ~12-20ms total | 0.001% | varies |
-
-All within target specifications.
+1. Read [README.md](README.md) to understand what it does
+2. Look at [USAGE.md](USAGE.md) for code examples
+3. Check [LIMITATIONS.md](LIMITATIONS.md) for what it can't do
+4. Read [COMPONENT_INTEGRATION.md](COMPONENT_INTEGRATION.md) for how to integrate with Trace components
 
 ---
 
-## Privacy Model
+## Support
 
-**What's kept:**
-- Motion state sequences
-- Duration buckets
-- Confidence scores
-
-**What's discarded:**
-- Raw accelerometer/gyroscope values
-- Orientation or heading
-- Gait signatures
-- User identity
-- Location coordinates
-
-**Even if compromised:**
-- Cannot reconstruct original motion
-- Cannot enable surveillance
-- Cannot re-identify users
-
-Privacy is architecturally guaranteed.
-
----
-
-## Support & Questions
-
-Refer to documentation files:
-- Technical questions → USAGE.md
-- Design questions → CONTRACT.md
-- Integration questions → COMPONENT_INTEGRATION.md
-- Offline concerns → OFFLINE_INTEGRATION.md
-- What's not supported → LIMITATIONS.md
-
----
-
-## Summary
-
-**You have a production-ready motion evidence kernel that:**
-- Runs 100% offline in your app
-- Uses zero network
-- Drains <1% battery daily
-- Feeds Zone Mapper, CEBE-X, and confidential computing
-- Is thoroughly tested (106 passing tests)
-- Has zero external dependencies
-- Cannot be weaponized for surveillance
-
-Ready to integrate with Trace.
-
----
-
-**What you need to do:**
-1. Link library in native modules (iOS/Android)
-2. Stream IMU data to engine
-3. Listen to motion events (callbacks, not HTTP)
-4. Wire into Zone Mapper and CEBE-X
-5. Test on real devices
-
-The hard part is done. The easy part is integration.
-
-Good luck.
+Documentation covers:
+- Technical usage (USAGE.md)
+- Design decisions (CONTRACT.md)  
+- Edge cases and limitations (LIMITATIONS.md)
+- Integration patterns (COMPONENT_INTEGRATION.md)
+- Offline operation (OFFLINE_INTEGRATION.md)

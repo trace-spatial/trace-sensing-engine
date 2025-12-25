@@ -1,36 +1,27 @@
 # Library Integration Guide
 
-Use Trace Sensing Engine as a library in your project.
+Using the sensing engine in your project.
 
-## 1. Add to Cargo.toml
+## Add to project
 
 ```toml
 [dependencies]
 trace_sensing = { path = "../trace-sensing-engine/rust-core" }
 ```
 
-Or from GitHub (when published):
-
-```toml
-[dependencies]
-trace_sensing = { git = "https://github.com/trace-project/sensing-engine", version = "0.1" }
-```
-
-## 2. Import and use
+## Basic usage
 
 ```rust
 use trace_sensing::{
     ImuSample, 
     MotionEvidencePipeline, 
     PipelineConfig,
-    BatteryOptimizedEngine,
 };
 
 fn main() {
     let config = PipelineConfig::default();
     let mut pipeline = MotionEvidencePipeline::new(config);
     
-    // Feed samples
     let sample = ImuSample::new(1000, [0.5, -0.2, -9.81], [0.01, 0.02, -0.005]);
     
     if let Some(window) = pipeline.process_sample(&sample) {
@@ -39,9 +30,7 @@ fn main() {
 }
 ```
 
-## 3. API Surface
-
-### Core Types
+## Core types
 
 ```rust
 // Input
@@ -53,50 +42,32 @@ ImuSample {
 
 // Output
 MotionEvidenceWindow {
-    window_id: u64,
-    start_ms: u64,
-    end_ms: u64,
+    timestamp: u64,
     segments: Vec<MotionSegment>,
     transitions: Vec<TransitionCandidate>,
     context_mode: MotionMode,
     confidence: f32,
     sensor_health: SensorHealth,
     validity_state: ValidityState,
-    schema_version: u32,
 }
 ```
 
-### Core Components
+## Two modes
 
+**Standard pipeline:**
 ```rust
-// Standard pipeline
 let mut pipeline = MotionEvidencePipeline::new(config);
 pipeline.process_sample(&sample)?;
-pipeline.flush()?;
+```
 
-// Battery-optimized (recommended)
+**Battery-optimized:**
+```rust
+use trace_sensing::BatteryOptimizedEngine;
+
 let mut engine = BatteryOptimizedEngine::new(config);
 engine.process_sample(&sample)?;
-engine.process_batch(&samples)?;
-engine.battery_metrics()?;
+let metrics = engine.battery_metrics()?;
 ```
-
-### Configuration
-
-```rust
-pub struct PipelineConfig {
-    pub filter_config: FilterConfig,
-    pub orientation_config: OrientationConfig,
-    pub segmentation_config: SegmentationConfig,
-    pub transition_config: TransitionConfig,
-    pub window_duration_ms: u32,
-    pub sample_rate_hz: f32,
-}
-```
-
-## 4. Microservice integration examples
-
-### REST API (using actix-web)
 
 ```rust
 use actix_web::{web, App, HttpServer, HttpResponse};

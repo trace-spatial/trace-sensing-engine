@@ -1,76 +1,67 @@
 # How Trace Uses the Sensing Engine
 
-## Architecture
+The engine is one layer in a larger system. Here's how the pieces fit together.
 
-Trace is designed as layers:
+---
+
+## Layered architecture
 
 ```
-┌─────────────────────────────────────────────────┐
-│  Trace Application                              │
-│  (User interface, retrieval, item ranking)      │
-├─────────────────────────────────────────────────┤
-│  Higher-Level Reasoning                         │
-│  (Zone mapping, context inference, recovery)    │
-├─────────────────────────────────────────────────┤
-│  Trace Sensing Engine (THIS)                    │
-│  (Motion evidence extraction from IMU)          │
-├─────────────────────────────────────────────────┤
-│  Operating System                               │
-│  (Raw accelerometer + gyroscope from sensors)   │
-└─────────────────────────────────────────────────┘
+┌──────────────────────────┐
+│  Trace App               │
+│  (UI, item ranking)      │
+├──────────────────────────┤
+│  Higher reasoning        │
+│  (zones, context)        │
+├──────────────────────────┤
+│  Motion Engine (this)    │
+│  (IMU extraction)        │
+├──────────────────────────┤
+│  OS sensors              │
+│  (accel, gyro)           │
+└──────────────────────────┘
 ```
 
-The sensing engine is the **foundation**. It doesn't make decisions. It extracts motion facts. Higher layers decide what to do with those facts.
+Engine is the foundation. It doesn't make decisions—just extracts motion facts. Higher layers interpret.
 
-## Why this separation?
+---
 
-### The engine's responsibility:
-- Convert raw IMU → motion evidence
-- Detect stops, hesitations, turns, pauses
-- Mark confidence and sensor quality
-- Run offline, use minimal battery
-- Never lose data integrity or privacy
+## What each layer does
 
-### Trace's responsibility:
-- Connect motion evidence to items
-- Build spatial/temporal context
-- Rank items by interruption likelihood
-- Handle user preferences and settings
-- Decide retrieval strategy
-- Own the UX
+**Engine:**
+- Converts raw IMU to motion evidence
+- Detects stops, turns, hesitations
+- Marks confidence and quality
+- Runs offline, efficient
 
-This separation is intentional. If the engine fails or is wrong, the whole system doesn't collapse. Trace can:
-- Use last-known position
-- Ask the user
-- Use alternative signals
-- Gracefully degrade
+**Trace:**
+- Connects motion to items
+- Builds spatial/temporal context
+- Ranks items
+- Handles UI and preferences
+- If engine is wrong, can gracefully degrade
 
-The engine just provides its best effort.
+---
 
 ## Data flow
 
-### Real-time flow
-
 ```
-Phone Sensors (50Hz)
+Sensors (50Hz)
     ↓
-Sensing Engine (continuous processing)
+Engine (processes continuously)
     ↓
-Motion Evidence Windows (every ~1 second)
+Motion windows (every ~1 second)
     ↓
-Trace Higher-Level Processing
+Trace reasoning
     ↓
-User Interface / Item Ranking
+App UI and ranking
 ```
 
-### What Trace receives
-
-Every 1-2 seconds, Trace gets a `MotionEvidenceWindow`:
+Every 1-2 seconds, engine produces a window:
 
 ```rust
 {
     timestamp: 1702000000000,
-    duration_bucket: Medium,
     confidence: 0.86,
     validity: Valid,
     sensor_health: Nominal,
@@ -80,24 +71,18 @@ Every 1-2 seconds, Trace gets a `MotionEvidenceWindow`:
         { mode: Turning, confidence: 0.88, duration_ms: 800 },
     ],
     transitions: [
-        { type: TURN, confidence: 0.85, timestamp: 1702000000800 },
+        { type: TURN, confidence: 0.85 },
     ],
 }
 ```
 
-This says: "Over the last ~1 second, user was mostly walking, then turned. Confidence in the turn is 85%."
+This says: "User was walking, then turned. 85% confident on the turn."
 
-It does NOT say: "User turned toward their desk" or "User walked into the kitchen."
+It doesn't say where, why, or what it means. That's Trace's job.
 
-That's Trace's job.
+---
 
-## Integration points
-
-### 1. Continuous motion tracking
-
-**What Trace does:**
-- Collect windows continuously in background
-- Track motion_mode over time (build state machine)
+## Integration
 - Build timeline of where user's body was
 
 **From the engine:**

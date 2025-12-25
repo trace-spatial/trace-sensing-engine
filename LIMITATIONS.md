@@ -1,160 +1,118 @@
 # Limitations of the Sensing Engine
 
-Be clear about what this engine can't do. Knowing the boundaries prevents misuse.
+What works and doesn't, by design.
 
-## What it absolutely cannot do
+## What it doesn't do
 
-### ❌ Cannot determine location
-- No GPS input
-- No map building
-- No room recognition
-- Cannot say "user is in kitchen"
+**Location:**
+- Can't figure out where you are
+- Can't recognize rooms or buildings
+- Can't map spaces
 
-Reason: Engine has only motion, not space. Trace adds the spatial layer.
+**Objects:**
+- Can't tell what you picked up (phone vs keys)
+- Can't identify surfaces
+- Can't detect stairs vs flat ground
 
-### ❌ Cannot recognize objects or surfaces
-- Cannot detect "picked up phone" vs "picked up keys"
-- Cannot identify surfaces (carpet, tile, desk)
-- Cannot determine if walking on stairs vs flat ground
+**Identity:**
+- Can't identify who's using the phone
+- Can't match motion patterns to people
+- Can't create biometric profiles
 
-Reason: IMU measures body motion only, not object interaction.
+These are intentional. They belong in higher-level systems.
 
-### ❌ Cannot identify individual users
-- No gait database or biometric matching
-- No identity verification
-- Cannot distinguish between two people with same device
+**Other limitations:**
+- Can't predict future movement
+- Can't understand activities
+- Can't recognize gestures
+- Can't work with compass data only
+- Can't process uncalibrated sensors
 
-Reason: Intentional design choice for privacy.
+---
 
-### ❌ Cannot predict future motion
-- No forecast capability
-- Cannot say "user will move next"
-- Cannot estimate journey destination
+## What it does, with limitations
 
-Reason: Only processes history, not prediction models.
+**Motion transitions:**
+- May miss very short pauses
+- Accuracy depends on sensor quality
+- Works best at 50Hz
 
-### ❌ Cannot determine activity semantics
-- Cannot say "user is exercising" vs "user is walking to store"
-- Cannot infer intent (going to bedroom = sleep?)
-- Cannot recognize gestures (shaking phone, nodding)
+**Stillness detection:**
+- Slow swaying looks like stillness
+- Can't distinguish standing from lying down
+- Vibration can trigger false motion
 
-Reason: Activity is interpretation layer, not motion extraction.
+**Direction changes:**
+- Works better with clear movement
+- Just says "turn" not the angle
+- No heading information
 
-### ❌ Cannot work with non-standard IMU data
-- Requires calibrated accel + gyro
-- Fails with compass-only or accelerometer-only input
-- Cannot work with raw uncalibrated sensor data
+**Noise handling:**
+- Good sensors only
+- Can't recover from constant heavy vibration
+- Needs factory calibration
 
-Reason: Algorithm assumes 6-DOF inertial measurement.
+---
 
-## What it can do, but with limitations
+## Problematic scenarios
 
-### ✓ Detects motion transitions, but...
-- May miss very brief pauses (<200ms)
-- Confidence varies with sensor quality
-- Works best at 50Hz baseline (performance degrades at very low sample rates)
+**Bumpy car ride:**
+Vibration looks like motion. Engine can't tell.  
+→ Trace filters this.
 
-### ✓ Detects still periods, but...
-- Confuses very slow rocking with stillness (someone standing and swaying looks almost still)
-- Cannot distinguish "standing in place" from "lying down still"
-- Short vibrations (driving, riding subway) may falsely trigger motion
+**Elevator or sudden stop:**
+Acceleration gets detected as motion.  
+→ Trace recognizes these.
 
-### ✓ Detects direction changes, but...
-- Works best with confident motion (hard to detect turns while walking slowly)
-- Cannot distinguish 15° turn from 90° turn (only outputs "TURN")
-- Compass-like accuracy not provided (no heading info)
+**Sensor drift:**
+Engine detects it but can't fix it.  
+→ Data marked degraded.
 
-### ✓ Handles sensor noise, but...
-- Very poor quality sensors may exceed noise tolerance
-- Cannot recover from continuous harsh vibration (jackhammer, power drill)
-- IMU bias drift not corrected (assumes device-level calibration done)
+**Low sample rate (<10Hz):**
+Details get lost.  
+→ Need 25Hz minimum.
 
-## Edge cases that break it
+**Standing still for hours:**
+Engine correctly marks STILL. Trace interprets it.
 
-### 1. **Continuous vibration**
-Sitting in car on bumpy road looks like motion because engine cannot distinguish vibration from movement.
+**Phone at weird angles:**
+Still works, noisier.  
+→ Confidence drops correctly.
 
-→ *Workaround*: Trace-level filtering based on consistency. Single vibration event ≠ motion.
+**Vehicle + walking:**
+Hard to separate.  
+→ Engine guesses, Trace uses patterns.
 
-### 2. **Rapid acceleration changes**
-Elevator acceleration, slamming on brakes, plane takeoff causes false motion detection.
-
-→ *Workaround*: Trace recognizes these patterns and downweights them.
-
-### 3. **Sensor malfunction**
-Faulty accelerometer drifts or becomes noisy. Engine detects degradation but cannot fix it.
-
-→ *Workaround*: Mark window as DEGRADED. Trace uses only high-confidence evidence.
-
-### 4. **Very low sample rate**
-Feeding <10Hz data loses transition details. Windows become too long, averaging out stops.
-
-→ *Workaround*: Increase sample rate to at least 25Hz. 50Hz is target.
-
-### 5. **Extremely long stillness**
-User standing in one place for 30 minutes. Engine marks as STILL throughout, no transitions.
-
-→ *Workaround*: Not a bug. Correct interpretation. Trace handles this (long zone occupancy).
-
-### 6. **Orientation extremes**
-Phone upside-down or at extreme angles. Gravity estimation works but motion signal may be noisy.
-
-→ *Workaround*: Engine still processes. May lower confidence, which is fine.
-
-### 7. **Multiple simultaneous inputs**
-User in moving vehicle PLUS walking around inside. Hard to separate vehicle motion from body motion.
-
-→ *Workaround*: Engine outputs best guess. Trace uses temporal coherence to filter.
-
-### 8. **Simultaneous rotation and translation**
-Rolling device while moving causes aliasing. Hard to separate axes.
-
-→ *Workaround*: Confidence drops. Engine marks as DEGRADED if confused.
+---
 
 ## Sensor requirements
 
-The engine expects:
-
-| Parameter | Minimum | Typical | Maximum |
-|-----------|---------|---------|---------|
+| Spec | Min | Typical | Max |
+|------|-----|---------|-----|
 | Sample rate | 10 Hz | 50 Hz | 200 Hz |
 | Accel range | ±4g | ±8g | ±16g |
 | Gyro range | ±250°/s | ±1000°/s | ±2000°/s |
-| Accel noise | - | <0.1g RMS | >0.5g RMS (degraded) |
-| Gyro noise | - | <0.02°/s | >0.1°/s (degraded) |
-| Calibration | Required | Factory | None (fails) |
+| Calibration | Required | Yes | None |
 
-**Below minimum spec**: Engine cannot work.  
-**At typical spec**: Full performance.  
-**Above maximum spec**: Works but confidence reduced.
+Below minimum = won't work  
+Typical = full performance  
+Above maximum = works, lower confidence
 
-## Performance constraints
+---
 
-### ✓ What the engine guarantees:
-- O(1) processing per sample (~12 microseconds)
-- Fixed 8KB memory footprint
-- No dynamic allocation in hot path
-- <1% daily battery (with adaptive sampling)
+## Platform support
 
-### ❌ What it cannot guarantee:
-- Real-time latency bounds (not hard real-time)
-- Sub-millisecond accuracy (±100ms tolerance is typical)
-- Deterministic CPU usage across all data patterns
-- Zero false positives (may detect spurious stops)
+**Works on:**
+- Android
+- iOS
+- Embedded Linux
+- Desktop (testing)
 
-## Platform limitations
-
-### Works on:
-- ✅ Android (any version, any chipset)
-- ✅ iOS (any version)
-- ✅ Embedded Linux (Raspberry Pi, etc.)
-- ✅ Desktop (testing, not production)
-
-### Cannot work on:
-- ❌ Devices without accelerometer/gyroscope
-- ❌ Wearables with only limited IMU (some watches)
-- ❌ Systems without monotonic time
-- ❌ Extreme environments (>100g vibration)
+**Doesn't work on:**
+- Devices without accelerometer/gyroscope
+- Some smartwatches with limited IMU
+- Systems without monotonic time
+- Extreme vibration environments
 
 ## Data limitations
 

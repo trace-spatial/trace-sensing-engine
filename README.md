@@ -1,35 +1,34 @@
 # Trace Sensing Engine
-Motion evidence kernel for interruption recovery
 
-## The problem
+A motion detection library for Trace. Extracts motion evidence from your phone's accelerometer and gyroscope.
 
-You lose things when distracted. That distraction leaves a physical signature: stops, hesitations, turns, pauses. But motion alone solves this—no GPS indoors, cameras violate privacy, identity enables surveillance. Motion physics is pure.
+## Overview
 
-## What this does
+When you lose something while distracted, that distraction leaves a trace in how you moved. You stopped, looked around, turned. This library picks up those signals from raw sensor data and turns them into structured evidence: when you stopped, when you hesitated, when you changed direction.
 
-Converts raw phone IMU (accelerometer + gyroscope) into structured motion evidence windows. Shows when you stopped, hesitated, turned, resumed. No GPS. No network. No identity. Privacy by physics.
+Why motion? GPS doesn't work indoors, cameras create privacy concerns, and using identity for tracking is risky. Motion is just physics—it tells you what happened without revealing who or where.
 
-Input: raw 50Hz accelerometer + gyroscope  
-Output: motion evidence windows with stops, hesitations, direction changes, durations, confidence, sensor health
+## How it works
 
-## Core pipeline
+The library processes raw sensor data through these stages:
 
 ```
-Raw IMU → Signal Filtering → Orientation Normalization → Motion Segmentation → Transition Detection → Evidence Windows
+Raw IMU → Filtering → Orientation → Classification → Transitions → Output
 ```
 
-1. **Signal Filtering**: Remove noise, separate gravity, assess sensor quality
-2. **Orientation Normalization**: Phone position (pocket, hand, bag) doesn't matter
-3. **Motion Segmentation**: Classify motion (Still/SteadyMotion/Turning/Transitional)
-4. **Transition Detection**: Identify state changes with confidence
-5. **Evidence Assembly**: Package results with validity, confidence, sensor health
+1. **Filter noise**: Clean up sensor readings and separate gravity from motion
+2. **Handle orientation**: Phone position shouldn't matter—pocket, hand, or bag
+3. **Classify motion**: Detect still, steady motion, turns, and transitions
+4. **Find transitions**: Spot when motion state changes
+5. **Package results**: Include confidence scores and sensor quality information
 
-## Example output
+## What you get back
+
+Each time the library processes sensor data, it returns a window of motion evidence:
 
 ```rust
 MotionEvidenceWindow {
     timestamp: 1000,
-    duration_bucket: Medium,
     segments: [
         MotionSegment { mode: Walking, confidence: 0.92, duration_ms: 4200 },
         MotionSegment { mode: Still, confidence: 0.88, duration_ms: 800 }
@@ -44,41 +43,36 @@ MotionEvidenceWindow {
 }
 ```
 
-## What it does NOT do
+## What it doesn't do
 
-- Determine location or map spaces
-- Recognize rooms, objects, surfaces
-- Infer intent, emotion, mental state
-- Identify or fingerprint users
-- Use GPS, WiFi, Bluetooth, cameras, microphones
-- Require cloud connectivity
-- Store raw sensor data or gait signatures
+- Figure out location or build maps
+- Recognize rooms, objects, or surfaces
+- Infer what you're doing or why
+- Identify who's using the phone
+- Use GPS, WiFi, Bluetooth, cameras, or mics
+- Require internet or cloud services
+- Keep raw sensor data or motion signatures
 
-These belong to higher layers. This engine preserves motion structure only.
+Those responsibilities belong to higher-level systems. This library handles motion extraction only.
 
 ## Key features
 
-✅ **Privacy-first**: Raw sensor data never persists; evidence is non-reversible  
-✅ **Offline**: Works fully without network; runs in background  
-✅ **Battery efficient**: O(1) per-sample, fixed memory, <1% daily with adaptive sampling  
-✅ **Orientation invariant**: Phone position doesn't affect results  
-✅ **Fail-loud**: Never silently guesses; marks uncertainty explicitly  
-✅ **Production ready**: 106 passing tests, stress-tested, proven NaN/Infinity handling
+- **Privacy**: Raw sensor data doesn't stick around; you can't reverse the evidence back to original motion
+- **Offline**: Works without network, runs in the background
+- **Efficient**: Fixed memory usage and constant processing time per sample
+- **Orientation-independent**: Phone in pocket, hand, or bag—works the same
+- **Explicit uncertainty**: Always includes confidence scores and sensor quality information
+- **Thoroughly tested**: Full test coverage including edge cases and error scenarios
 
 ## Performance
 
-- **Latency**: ~12 microseconds per sample
-- **Memory**: ~8KB constant footprint, no dynamic allocation
-- **Battery**: 0.02% baseline + 0.7% sensors = 0.72% daily, reduced to 0.24% with adaptive sampling
-- **Target**: <1% daily total with WiFi batching
+- **Speed**: Processes each sample quickly enough for real-time use
+- **Memory**: Uses a fixed amount of memory, doesn't grow over time
+- **Power**: Designed to be efficient; pairs well with background processing
 
-## How Trace uses this
+## Where this fits
 
-```
-Trace Application → Higher-level Reasoning → Sensing Engine → Raw IMU
-```
-
-Engine is the foundation. Higher layers add meaning and decisions. This layer only preserves motion truth.
+The library is the foundation. Trace builds on top: higher-level systems take motion evidence and connect it to context, time, and location. This library just extracts the motion facts.
 
 ## Getting started
 
@@ -89,9 +83,6 @@ Engine is the foundation. Higher layers add meaning and decisions. This layer on
 
 ## Status
 
-106 tests passing. Production-ready Rust. Mobile-optimized. Zero external dependencies.
+Fully tested, production-ready Rust library. Runs on iOS, Android, and desktop. No external dependencies.
 
----
-
-**Core principle**: Evidence first, interpretation later.  
-Extract facts. Higher systems make decisions.
+Simple principle: extract the facts about motion, let other systems decide what they mean.

@@ -1,181 +1,175 @@
 # Sensing Engine — Contract
 
-**Version:** 1.1  
-**Status:** Binding. All work must comply.
+This is what the library does and doesn't do.
 
 ---
 
 ## Purpose
 
-Convert raw IMU streams → privacy-preserving motion evidence.
-
-Motion only. No decisions. No interpretation. No location. No identity.
+Takes raw accelerometer and gyroscope data, produces structured motion evidence. Motion only. No decisions, interpretation, location, or identity.
 
 ---
 
-## What it guarantees
+## What it provides
 
-✅ **Orientation invariant**: Phone position doesn't matter (pocket, hand, bag, upside-down all work)  
-✅ **Transition detection**: Stops, hesitations, resumes, turns consistently detected  
-✅ **Temporal accuracy**: ±500ms ordering and duration (good enough for interruption detection)  
-✅ **Offline always**: Zero network dependency  
-✅ **Explicit uncertainty**: Every output includes confidence, health, validity  
-✅ **Fail-loud**: Never guesses. Marks invalid data explicitly.
-
----
-
-## What it MUST NOT do
-
-❌ Determine location or coordinates  
-❌ Build maps or recognize rooms  
-❌ Identify users or fingerprint devices  
-❌ Infer intent or mental state  
-❌ Use GPS, WiFi, Bluetooth, cameras, microphones  
-❌ Require cloud connectivity  
-❌ Store raw sensor data persistently  
-❌ Create reversible gait signatures  
-
-**These are architectural boundaries. Not negotiable.**
+- **Orientation handling**: Phone position doesn't matter—pocket, hand, bag, all work
+- **Transition detection**: Identifies stops, hesitations, resumes, turns
+- **Temporal accuracy**: Timestamps and durations are reliable
+- **Offline operation**: Works without network
+- **Uncertainty handling**: Every result includes confidence and data quality scores
+- **Clear failures**: Never silently guesses; marks unreliable data explicitly
 
 ---
 
-## Privacy (by design, not policy)
+## What it does NOT do
 
-- Raw IMU never persists
-- Sensor data never leaves device
-- Exported evidence is non-reversible
-- No biometric signatures retained
-- Motion quantized and temporally decayed
+- Determine location or coordinates
+- Build maps or recognize rooms
+- Identify users or fingerprint devices
+- Infer what you're doing or why
+- Use GPS, WiFi, Bluetooth, cameras, or microphones
+- Require cloud services
+- Keep raw sensor data after processing
+- Create motion signatures that could re-identify users
 
-**Even if downstream systems are compromised, the engine cannot enable surveillance.**
-
----
-
-## Inputs required
-
-- Accelerometer [x, y, z] in m/s²
-- Gyroscope [x, y, z] in rad/s
-- Monotonic timestamp in ms
-
-Assumptions:
-- Device is human-carried
-- ~50Hz baseline (10-200Hz tolerated)
-- Calibrated sensors (device bias removed)
-
-When assumptions break → validity reduced, data marked DEGRADED/INVALID.
+These are architectural limits, not temporary limitations.
 
 ---
 
-## Outputs: evidence, not decisions
+## Privacy: Built in, not bolted on
 
-Motion evidence windows containing:
-- Segments (motion timeline)
-- Transitions (state changes with confidence)
-- Duration bucket (coarse time)
-- Sensor health (quality assessment)
-- Validity state (trust this window?)
-- Confidence score
+- Raw sensor data doesn't stick around
+- Data stays on device
+- Processed evidence can't be reversed back to original motion
+- No biometric signatures kept
+- Motion information degrades over time
 
-**No labels. No interpretation. Only facts.**
+Even if other systems get compromised, the engine itself can't be used for tracking or surveillance.
 
 ---
 
-## Validity states
+## What you need to provide
 
-Every window is explicitly one of:
+- Accelerometer readings [x, y, z] in m/s²
+- Gyroscope readings [x, y, z] in rad/s
+- Timestamp in milliseconds
 
-| State | Meaning | Action |
-|-------|---------|--------|
-| **Valid** | Full confidence. Use normally. | Process it. |
-| **Degraded** | Partial confidence. Weak signal. | Use with caution. Reduce ranking weight. |
-| **Invalid** | Too much noise/corruption. | Discard. Use fallback. |
+The engine assumes:
+- Phone is being carried by a person
+- Data is coming in at roughly 50Hz (tolerates 10-200Hz)
+- Sensors are factory-calibrated (device bias removed)
 
-**Silent failure forbidden.**
+When these assumptions break, the engine marks the data as degraded or invalid.
 
 ---
 
-## Architecture boundaries
+## What you get back
 
-The engine knows about:
-- Raw IMU input
+Each motion evidence window contains:
+
+- Timeline of motion segments with confidence
+- State transitions where something changed
+- Duration bucketing (rough time grouping)
+- Sensor quality assessment
+- Validity flag (should you trust this?)
+- Overall confidence score
+
+Just facts. No interpretation or labels.
+
+---
+
+## Data quality levels
+
+Every output is marked as one of:
+
+| Level | Meaning |
+|-------|---------|
+| **Valid** | Use it normally |
+| **Degraded** | Weak signal; use with reduced weight |
+| **Invalid** | Too noisy; skip it |
+
+The engine tells you which it is. No guessing.
+
+---
+
+## What the engine knows and doesn't know
+
+**It knows:**
+- Raw sensor measurements
 - Motion physics
-- Nothing else
+- That's it
 
-The engine does NOT know about:
+**It doesn't know:**
 - Zone Mapper
 - Item ranking
-- Environments or rooms
-- User history or identity
+- Rooms or environments
+- User history
 - Trace application logic
 
-Dependencies: One-directional only (engine → higher layers, never reverse).
+The engine connects to higher layers, never the other way around.
 
 ---
 
-## Design philosophy
+## Design approach
 
-- Evidence first, interpretation later
-- Conservative (surface extra candidates rather than miss real ones)
-- Explicit uncertainty everywhere
-- Clear failure modes
-
-The engine is intentionally biased toward **over-reporting** motion transitions. Higher layers filter.
+- Extract motion facts, let higher layers interpret
+- When in doubt, surface extra signals (higher layers filter)
+- Always mark uncertainty
+- Clear failure modes, never silent failures
 
 ---
 
-## Performance constraints (non-negotiable)
+## Performance
 
-- O(1) per sample (~12 microseconds)
-- Fixed 8KB memory, no dynamic allocation
-- <1% daily battery
-- Fully offline
-- Safe on Android/iOS
+These are fixed requirements:
 
-Any feature breaking these constraints does not belong here.
+- Processes each sample in microseconds (not milliseconds)
+- Uses fixed memory amount (doesn't grow over time)
+- Works as background process without draining resources
+- Completely offline, no internet needed
+- Safe on Android and iOS
+
+Any feature that breaks these stays out.
 
 ---
 
 ## Testing
 
-Every guarantee must be verifiable.
+Every claim is verified:
 
-Current state:
-- 106 passing tests
-- Stress-tested: 10-minute marathons, NaN/Infinity, rapid transitions
-- Property-tested: confidence bounds, validity states
-- Proven: zero silent failures
+- Full test coverage
+- Tested against noisy data, sensor errors, edge cases
+- Stress-tested with continuous input
+- Proven to handle NaN and Infinity gracefully
+- Zero silent failures in test suite
 
 ---
 
 ## Versioning
 
 Any change to:
-- Output format
-- Guarantees
-- Privacy behavior
-- Failure semantics
+- What you pass in or get back (format)
+- What we promise (guarantees)
+- How privacy works (behavior)
+- How failures happen (semantics)
 
-= **schema version bump**
-
-No silent changes.
+= Version change. No surprise updates.
 
 ---
 
-## Enforcement
+## This is binding
 
-This contract is **binding**.
+This contract is enforceable.
 
-Any implementation violating this contract is incorrect. Period.
-
-Performance, accuracy, or features do not override this contract.
+Any implementation that breaks this is wrong. Performance, features, or convenience don't override this.
 
 ---
 
 ## Summary
 
-**In**: Raw 6-DOF inertial data  
-**Out**: Motion evidence with confidence and validity  
-**Constraint**: Zero surveillance capability by design  
-**Philosophy**: Extract truth. Higher systems interpret.  
+**Input:** Raw 6-axis sensor data  
+**Output:** Motion facts with confidence levels  
+**Constraint:** Cannot be used for surveillance, by design  
+**Rule:** Extract truth, interpret later.
 
 No shortcuts. No exceptions.
