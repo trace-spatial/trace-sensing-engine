@@ -1,7 +1,6 @@
-/// Production-level stress testing for the motion evidence pipeline.
+/// Stress testing for the motion evidence pipeline.
 /// 
-/// These tests are designed to expose real-world failure modes that would only
-/// appear under extreme, sustained, or pathological conditions.
+/// Tests with various data patterns and edge cases to ensure robustness.
 
 #[cfg(test)]
 mod stress_tests {
@@ -9,10 +8,10 @@ mod stress_tests {
     use crate::pipeline::*;
 
     // ============================================================================
-    // CATEGORY 1: EXTREME DURATION & THROUGHPUT
+    // CATEGORY 1: THROUGHPUT & DURATION
     // ============================================================================
 
-    /// Test 1 minute of continuous processing at 50Hz (3000 samples)
+    /// Test 1 minute of continuous processing at 50Hz
     #[test]
     fn stress_one_minute_continuous_50hz() {
         let config = PipelineConfig::default();
@@ -85,12 +84,12 @@ mod stress_tests {
     }
 
     // ============================================================================
-    // CATEGORY 2: EXTREME PARAMETER VALUES
+    // CATEGORY 2: PARAMETER VALUES
     // ============================================================================
 
-    /// Test with extreme accelerometer values (free fall, impact)
+    /// Test with high accelerometer values
     #[test]
-    fn stress_extreme_acceleration_values() {
+    fn stress_high_acceleration_values() {
         let config = PipelineConfig::default();
         let mut pipeline = MotionEvidencePipeline::new(config);
         
@@ -115,9 +114,9 @@ mod stress_tests {
         let _ = pipeline.flush();
     }
 
-    /// Test with extreme gyroscope values (rapid rotation)
+    /// Test with high gyroscope values
     #[test]
-    fn stress_extreme_gyro_values() {
+    fn stress_high_gyro_values() {
         let config = PipelineConfig::default();
         let mut pipeline = MotionEvidencePipeline::new(config);
         
@@ -245,9 +244,9 @@ mod stress_tests {
     // CATEGORY 4: MEMORY & ALLOCATION STRESS
     // ============================================================================
 
-    /// Test with extreme sample rates
+    /// Test with various sample rates
     #[test]
-    fn stress_extreme_sample_rate_variations() {
+    fn stress_sample_rate_variations() {
         // Minimum throughput
         let config_slow = PipelineConfig {
             sample_rate_hz: 1.0,
@@ -369,9 +368,9 @@ mod stress_tests {
     // CATEGORY 6: BOUNDARY CONDITIONS
     // ============================================================================
 
-    /// Test extreme configurations
+    /// Test various configurations
     #[test]
-    fn stress_extreme_configurations() {
+    fn stress_configuration_variations() {
         // Minimum config
         let config_min = PipelineConfig {
             sample_rate_hz: 1.0,
@@ -531,12 +530,12 @@ mod stress_tests {
     }
 
     // ============================================================================
-    // CATEGORY 8: ULTIMATE STRESS TEST
+    // CATEGORY 8: EXTENDED PROCESSING
     // ============================================================================
 
-    /// Ultimate stress test: 5 minute marathon with chaos
+    /// Extended test: 5 minute continuous processing with varying data
     #[test]
-    fn stress_ultimate_five_minute_chaos() {
+    fn stress_five_minute_continuous() {
         let config = PipelineConfig::default();
         let mut pipeline = MotionEvidencePipeline::new(config);
         
