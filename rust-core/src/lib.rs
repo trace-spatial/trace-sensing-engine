@@ -30,6 +30,7 @@
 
 pub mod types;
 pub mod signal;
+pub mod orientation;
 
 // Re-export commonly used types
 pub use types::{
@@ -38,4 +39,6 @@ pub use types::{
 };
 
 pub use signal::{FilterConfig, GravityEstimator, SignalProcessor, ProcessedSample};
+
+pub use orientation::{Quaternion, OrientationConfig, OrientationEstimator};
 
