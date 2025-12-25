@@ -3,7 +3,6 @@
 /// Provides adaptive sampling, battery monitoring, and power-efficient
 /// integration of the core motion evidence pipeline.
 ///
-/// Achieves <1% daily battery consumption through:
 /// - Adaptive sample rate (10-100Hz based on motion mode)
 /// - Batch processing (10 samples at a time)
 /// - Smart window updates (only when confidence > threshold)

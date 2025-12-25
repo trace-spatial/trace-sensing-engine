@@ -1,6 +1,5 @@
 /// Integration tests for the complete motion evidence pipeline
-/// Tests realistic motion scenarios to validate end-to-end pipeline behavior,
-/// performance characteristics, and design guarantees.
+/// Tests realistic motion scenarios to validate end-to-end pipeline behavior.
 
 #[cfg(test)]
 mod integration_tests {
