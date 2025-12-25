@@ -2,10 +2,13 @@
 name = "trace_sensing"
 version = "0.1.0"
 edition = "2021"
-
-[[bin]]
-name = "trace_sensing"
-path = "src/main.rs"
+authors = ["Trace Team"]
+description = "Privacy-first motion evidence kernel for interruption recovery. Converts raw IMU streams into structured motion evidence with zero surveillance capability."
+license = "MIT"
+repository = "https://github.com/trace-project/sensing-engine"
+readme = "../README.md"
+keywords = ["imu", "motion", "privacy", "sensor", "offline"]
+categories = ["algorithms", "embedded", "no-std-compatible"]
 
 [lib]
 name = "trace_sensing"
@@ -14,3 +17,8 @@ path = "src/lib.rs"
 [dependencies]
 
 [dev-dependencies]
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
