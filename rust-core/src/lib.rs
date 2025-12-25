@@ -35,6 +35,9 @@ pub mod segmentation;
 pub mod transitions;
 pub mod pipeline;
 
+#[cfg(test)]
+mod integration_tests;
+
 // Re-export commonly used types
 pub use types::{
     DurationBucket, ImuSample, MotionEvidenceWindow, MotionMode, MotionSegment, SensorHealth,

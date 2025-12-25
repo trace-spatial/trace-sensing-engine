@@ -25,7 +25,7 @@ use crate::signal::{SignalProcessor};
 use crate::orientation::{OrientationConfig, OrientationEstimator};
 use crate::segmentation::{SegmentationConfig, SegmentationEngine};
 use crate::transitions::{
-    TransitionConfig, TransitionDetector, TransitionBoundary,
+    TransitionConfig, TransitionDetector,
 };
 
 /// Configuration for the complete motion evidence pipeline.
