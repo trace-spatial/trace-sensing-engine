@@ -1,88 +1,109 @@
-# Trace Sensing Engine
+# trace-sensing-engine
 
-A motion detection library for Trace. Extracts motion evidence from your phone's accelerometer and gyroscope.
+IMU processing library for context disruption detection.
 
 ## Overview
 
-When you lose something while distracted, that distraction leaves a trace in how you moved. You stopped, looked around, turned. This library picks up those signals from raw sensor data and turns them into structured evidence: when you stopped, when you hesitated, when you changed direction.
+Rust library that processes accelerometer and gyroscope data to detect moments when user attention may have shifted. Outputs trajectory, step events, and disruption signals.
 
-Why motion? GPS doesn't work indoors, cameras create privacy concerns, and using identity for tracking is risky. Motion is just physics—it tells you what happened without revealing who or where.
-
-## How it works
-
-The library processes raw sensor data through these stages:
+## Modules
 
 ```
-Raw IMU → Filtering → Orientation → Classification → Transitions → Output
+rust-core/src/
+├── lib.rs                    # Public API
+├── types.rs                  # Data structures
+├── pipeline.rs               # Main processing pipeline
+├── orientation.rs            # Madgwick AHRS
+├── step_detection.rs         # Step detection
+├── stance_detection.rs       # Stance/swing phase
+├── heading.rs                # Heading estimation
+├── trajectory.rs             # PDR (pedestrian dead reckoning)
+├── vehicle_detection.rs      # Transport mode detection
+├── micro_events.rs           # Phone interaction detection
+├── context_disruption.rs     # Disruption detection
+├── wire.rs                   # Binary wire format
+├── export.rs                 # JSON export
+└── ffi.rs                    # C FFI bindings
 ```
 
-1. **Filter noise**: Clean up sensor readings and separate gravity from motion
-2. **Handle orientation**: Phone position shouldn't matter—pocket, hand, or bag
-3. **Classify motion**: Detect still, steady motion, turns, and transitions
-4. **Find transitions**: Spot when motion state changes
-5. **Package results**: Include confidence scores and sensor quality information
+## Disruption Types
 
-## What you get back
+| Type | Weight |
+|------|--------|
+| PhonePlacement | 0.9 |
+| TransportTransition | 0.8 |
+| SearchingBehavior | 0.75 |
+| AbruptHalt | 0.7 |
+| EnvironmentTransition | 0.65 |
+| ExtendedStillness | 0.6 |
+| ContextResumption | 0.6 |
+| Hesitation | 0.5 |
 
-Each time the library processes sensor data, it returns a window of motion evidence:
+## Wire Format
 
-```rust
-MotionEvidenceWindow {
-    timestamp: 1000,
-    segments: [
-        MotionSegment { mode: Walking, confidence: 0.92, duration_ms: 4200 },
-        MotionSegment { mode: Still, confidence: 0.88, duration_ms: 800 }
-    ],
-    transitions: [
-        TransitionCandidate { type: STOP, confidence: 0.85 },
-        TransitionCandidate { type: RESUME, confidence: 0.79 }
-    ],
-    confidence: 0.86,
-    sensor_health: Nominal,
-    validity: Valid
-}
+Binary serialization for downstream consumers:
+
+```
+Header (8 bytes):
+┌──────────┬────────┬──────────┬──────────────┐
+│ Magic 2B │ Type 1B│ Rsv 1B   │ PayloadLen 4B│
+└──────────┴────────┴──────────┴──────────────┘
+
+Messages:
+- TrajectoryUpdate: 32 bytes
+- StepEvent: 20 bytes
+- DisruptionEvent: 64 bytes
+- TransportChange: 12 bytes
+- SessionSummary: 48 bytes
 ```
 
-## What it doesn't do
+Little-endian, 4-byte aligned.
 
-- Figure out location or build maps
-- Recognize rooms, objects, or surfaces
-- Infer what you're doing or why
-- Identify who's using the phone
-- Use GPS, WiFi, Bluetooth, cameras, or mics
-- Require internet or cloud services
-- Keep raw sensor data or motion signatures
+## FFI
 
-Those responsibilities belong to higher-level systems. This library handles motion extraction only.
+```c
+TraceConfig config = {
+    .sample_rate_hz = 100.0,
+    .device_id = "device_001"
+};
+TraceEngine* engine = trace_engine_create(&config);
 
-## Key features
+TraceSampleOutput output;
+trace_process_sample(engine, timestamp_ms,
+    ax, ay, az, gx, gy, gz, mx, my, mz, &output);
 
-- **Privacy**: Raw sensor data doesn't stick around; you can't reverse the evidence back to original motion
-- **Offline**: Works without network, runs in the background
-- **Efficient**: Fixed memory usage and constant processing time per sample
-- **Orientation-independent**: Phone in pocket, hand, or bag—works the same
-- **Explicit uncertainty**: Always includes confidence scores and sensor quality information
-- **Thoroughly tested**: Full test coverage including edge cases and error scenarios
+// Binary output (primary path)
+const uint8_t* buf = trace_get_wire_buffer(engine);
+uint32_t len = trace_get_wire_buffer_len(engine);
 
-## Performance
+// JSON output (debug path)
+const char* json = trace_get_last_disruptions_json(engine);
 
-- **Speed**: Processes each sample quickly enough for real-time use
-- **Memory**: Uses a fixed amount of memory, doesn't grow over time
-- **Power**: Designed to be efficient; pairs well with background processing
+trace_engine_destroy(engine);
+```
 
-## Where this fits
+## Build
 
-The library is the foundation. Trace builds on top: higher-level systems take motion evidence and connect it to context, time, and location. This library just extracts the motion facts.
+```bash
+cd rust-core
+cargo test
+cargo build --release
+```
 
-## Getting started
+Cross-compile:
+```bash
+cargo build --release --target aarch64-apple-ios
+cargo build --release --target aarch64-linux-android
+```
 
-- [USAGE.md](USAGE.md) — How to use the engine
-- [CONTRACT.md](CONTRACT.md) — Privacy and architectural guarantees
-- [LIMITATIONS.md](LIMITATIONS.md) — What's not supported
-- [HOW_TRACE_USES_IT.md](HOW_TRACE_USES_IT.md) — How this integrates with Trace
+## Tests
 
-## Status
+```
+190 passing
+```
 
-Fully tested, production-ready Rust library. Runs on iOS, Android, and desktop. No external dependencies.
+## Related Docs
 
-Simple principle: extract the facts about motion, let other systems decide what they mean.
+- [CONTRACT.md](CONTRACT.md) — interface contract
+- [USAGE.md](USAGE.md) — API reference
+- [LIMITATIONS.md](LIMITATIONS.md) — constraints

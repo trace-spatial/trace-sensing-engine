@@ -1,302 +1,209 @@
-# How to Use the Trace Sensing Engine
+# Usage
 
-## Basic setup
+## Rust API
 
-Add to your Rust project:
-
-```toml
-[dependencies]
-trace_sensing = { path = "./trace-sensing-engine/rust-core" }
-```
-
-## Simple example: Feed raw IMU, get motion evidence
+### Basic Pipeline
 
 ```rust
-use trace_sensing::{
-    ImuSample, MotionEvidencePipeline, PipelineConfig,
-    BatteryOptimizedEngine
+use trace_sensing::{ImuSample, FullMovementPipeline, PipelineConfig};
+
+let config = PipelineConfig::default();
+let mut pipeline = FullMovementPipeline::new(config);
+
+let sample = ImuSample::new(
+    timestamp_ms,
+    [ax, ay, az],
+    [gx, gy, gz],
+);
+
+let result = pipeline.process(&sample);
+
+// Trajectory point (always present)
+println!("Position: ({}, {})", result.trajectory.x, result.trajectory.y);
+println!("Heading: {}", result.trajectory.heading_rad);
+
+// Step event (when detected)
+if let Some(step) = result.step_event {
+    println!("Step: {} m stride", step.stride_length_m);
+}
+```
+
+### Battery-Optimized
+
+```rust
+use trace_sensing::{BatteryOptimizedEngine, PipelineConfig};
+
+let mut engine = BatteryOptimizedEngine::new(PipelineConfig::default());
+
+for sample in imu_stream {
+    if let Some(window) = engine.process_sample(sample) {
+        // Process window
+    }
+}
+
+let metrics = engine.battery_metrics();
+println!("Battery impact: {:.2}%/day", metrics.battery_percent());
+```
+
+### Context Disruption
+
+```rust
+use trace_sensing::ContextDisruptionDetector;
+
+let mut detector = ContextDisruptionDetector::new();
+
+// After pipeline.process():
+let disruptions = detector.update(
+    &result.trajectory,
+    result.step_event.as_ref(),
+    transport_mode,
+    &micro_events,
+);
+
+for d in disruptions {
+    println!("{}: conf={:.2} importance={:.2}", 
+        d.disruption_type, d.confidence, d.importance);
+}
+```
+
+## C FFI
+
+### Initialization
+
+```c
+#include "trace_sensing.h"
+
+TraceConfig config = {
+    .sample_rate_hz = 100.0,
+    .device_id = "device_001",
+    .high_sensitivity = 0
 };
 
-fn main() {
-    // Create engine with default config
-    let config = PipelineConfig::default();
-    let mut pipeline = MotionEvidencePipeline::new(config);
-
-    // Process raw sensor samples
-    let sample = ImuSample::new(
-        1000,                           // timestamp_ms
-        [0.5, -0.2, -9.81],            // accel [x, y, z] m/s²
-        [0.01, 0.02, -0.005]           // gyro [x, y, z] rad/s
-    );
-
-    if let Some(window) = pipeline.process_sample(&sample) {
-        println!("Got motion evidence window:");
-        println!("  Confidence: {}", window.confidence);
-        println!("  Mode: {:?}", window.context_mode);
-        println!("  Validity: {:?}", window.validity_state);
-        println!("  Sensor health: {:?}", window.sensor_health);
-    }
+TraceEngine* engine = trace_engine_create(&config);
+if (!engine) {
+    // Handle error
 }
 ```
 
-## Battery-optimized version (recommended)
+### Processing
 
-The library includes adaptive sampling that adjusts processing based on motion state.
+```c
+TraceSampleOutput output;
 
-```rust
-use trace_sensing::BatteryOptimizedEngine;
-use trace_sensing::PipelineConfig;
+trace_process_sample(
+    engine,
+    timestamp_ms,
+    accel_x, accel_y, accel_z,
+    gyro_x, gyro_y, gyro_z,
+    mag_x, mag_y, mag_z,  // 0.0 if unavailable
+    &output
+);
 
-fn main() {
-    let config = PipelineConfig::default();
-    let mut engine = BatteryOptimizedEngine::new(config);
-
-    // Feed samples as they arrive from IMU
-    for sample in imu_stream {
-        // Skips samples intelligently based on motion state
-        if let Some(window) = engine.process_sample(sample) {
-            // Window ready - motion evidence extracted
-            handle_motion_window(window);
-        }
-    }
-
-    // Optional: check battery metrics
-    let metrics = engine.battery_metrics();
-    println!("Daily battery: {:.2}%", metrics.battery_percent());
-}
+// output.has_step
+// output.disruption_count
+// output.transport_mode
 ```
 
-## Batch processing (high-throughput)
+### Wire Buffer Access
 
-Process multiple samples at once:
+```c
+const uint8_t* buf = trace_get_wire_buffer(engine);
+uint32_t len = trace_get_wire_buffer_len(engine);
 
-```rust
-let samples = vec![
-    ImuSample::new(1000, [0.0, 0.0, 9.81], [0.0, 0.0, 0.0]),
-    ImuSample::new(1020, [0.1, 0.0, 9.80], [0.0, 0.0, 0.0]),
-    // ... more samples
-];
-
-let windows = engine.process_batch(&samples);
-for window in windows {
-    println!("Processed window at {}", window.timestamp);
-}
+// Send to consumer
+write(fd, buf, len);
 ```
 
-## Interpreting motion evidence windows
+### JSON Export
 
-```rust
-pub struct MotionEvidenceWindow {
-    pub timestamp: u64,                    // ms
-    pub duration_bucket: DurationBucket,   // VeryShort/Short/Medium/Long/VeryLong
-    pub segments: Vec<MotionSegment>,      // motion timeline
-    pub transitions: Vec<TransitionCandidate>,  // state changes
-    pub confidence: f32,                   // 0.0-1.0 overall confidence
-    pub context_mode: MotionMode,          // Still/SteadyMotion/Turning/Transitional
-    pub sensor_health: SensorHealth,       // Nominal/Degraded/Critical
-    pub validity_state: ValidityState,     // Valid/Degraded/Invalid
+```c
+// Per-sample disruptions
+if (output.disruption_count > 0) {
+    const char* json = trace_get_last_disruptions_json(engine);
+    // json is owned by engine, valid until next process call
 }
+
+// Full session export
+char* session = trace_export_session_json(engine);
+// Caller owns this string
+send_to_backend(session);
+trace_free_string(session);
 ```
 
-### Key fields
+### Cleanup
 
-**`context_mode`**: Current best estimate of motion type
-- `Still`: Device not moving
-- `SteadyMotion`: Consistent walking/motion
-- `Turning`: Rotational motion detected
-- `Transitional`: Unclear state (change in progress)
-
-**`segments`**: Timeline of motion within this window
-```rust
-pub struct MotionSegment {
-    pub mode: MotionMode,
-    pub confidence: f32,        // How sure about this mode
-    pub duration_ms: u32,       // How long this segment lasted
-    pub start_sample: usize,
-}
+```c
+trace_engine_destroy(engine);
 ```
 
-**`transitions`**: Boundaries between states where something changed
-```rust
-pub enum TransitionType {
-    START,           // Started moving from still
-    STOP,            // Stopped from movement
-    TURN,            // Changed direction significantly
-    HESITATION,      // Brief pause mid-motion
-    ACTIVITY_SHIFT,  // Mode changed (walk→turn)
-    DIRECTION_CHANGE,// Direction shifted
-}
+## Wire Format Parsing
 
-pub struct TransitionCandidate {
-    pub transition_type: TransitionType,
-    pub confidence: f32,
-    pub timestamp_ms: u64,
-}
-```
+```c
+typedef struct {
+    uint16_t magic;      // 0x5452 ("TR")
+    uint8_t  msg_type;
+    uint8_t  reserved;
+    uint32_t payload_len;
+} WireHeader;
 
-**`sensor_health`**: Quality of input IMU
-- `Nominal`: Good quality, trust the data
-- `Degraded`: Noisy or inconsistent, confidence reduced
-- `Critical`: Too much noise, data may be invalid
+const uint8_t* ptr = buf;
+const uint8_t* end = buf + len;
 
-**`validity_state`**: Should this window be used?
-- `Valid`: Full confidence, use normally
-- `Degraded`: Partial confidence, use with caution
-- `Invalid`: Don't use this window
-
-## Real example: Interrupt detection
-
-```rust
-fn detect_interruption(window: &MotionEvidenceWindow) -> bool {
-    // Only trust valid windows
-    if window.validity_state != ValidityState::Valid {
-        return false;
-    }
-
-    // Look for stops or hesitations
-    let has_stop = window.transitions.iter()
-        .any(|t| t.transition_type == TransitionType::STOP && t.confidence > 0.80);
+while (ptr + 8 <= end) {
+    WireHeader* hdr = (WireHeader*)ptr;
+    if (hdr->magic != 0x5452) break;
     
-    let has_hesitation = window.transitions.iter()
-        .any(|t| t.transition_type == TransitionType::HESITATION && t.confidence > 0.75);
-
-    has_stop || has_hesitation
+    ptr += 8;  // Skip header
+    
+    switch (hdr->msg_type) {
+        case 0x01:  // TrajectoryUpdate
+            // 32 bytes: ts(8), x(4), y(4), z(4), heading(4), velocity(4), conf(1), stance(1), pad(2)
+            break;
+        case 0x02:  // StepEvent
+            // 20 bytes
+            break;
+        case 0x03:  // DisruptionEvent
+            // 64 bytes
+            break;
+    }
+    
+    ptr += hdr->payload_len;
 }
 ```
 
 ## Configuration
 
-Default config is 50Hz baseline with 1-second windows. Customize:
-
 ```rust
-use trace_sensing::{
-    PipelineConfig,
-    signal::FilterConfig,
-    segmentation::SegmentationConfig,
-};
-
 let mut config = PipelineConfig::default();
 
-// Change window duration (milliseconds)
-config.window_duration_ms = 2000;  // 2-second windows
+// Window duration
+config.window_duration_ms = 1000;
 
-// Adjust signal filtering (lower alpha = more stable)
+// Stillness threshold (m/s²)
+config.segmentation_config.still_threshold = 0.15;
+
+// Gravity filter (lower = more stable)
 config.filter_config.gravity_filter_alpha = 0.01;
-
-// Customize motion classification thresholds
-config.segmentation_config.still_threshold = 0.15;  // m/s²
-
-let mut pipeline = MotionEvidencePipeline::new(config);
 ```
 
-## Common patterns
+## Error Handling
 
-### Pattern 1: Track motion state transitions
-
-```rust
-let mut last_mode = MotionMode::Still;
-
-for window in windows {
-    if window.context_mode != last_mode {
-        println!("Mode changed: {:?} → {:?}", last_mode, window.context_mode);
-        last_mode = window.context_mode;
-    }
-}
-```
-
-### Pattern 2: Detect brief interruptions
-
-```rust
-fn is_brief_interruption(window: &MotionEvidenceWindow) -> bool {
-    matches!(window.duration_bucket, 
-        DurationBucket::VeryShort | DurationBucket::Short)
-    && window.transitions.iter()
-        .any(|t| matches!(t.transition_type, 
-            TransitionType::STOP | TransitionType::HESITATION))
-    && window.confidence > 0.75
-}
-```
-
-### Pattern 3: Confidence-based filtering
-
-```rust
-fn should_process(window: &MotionEvidenceWindow) -> bool {
-    // Only act on high-confidence windows
-    window.confidence > 0.80 
-    && window.sensor_health == SensorHealth::Nominal
-    && window.validity_state == ValidityState::Valid
-}
-```
-
-## Battery monitoring
-
-```rust
-let metrics = engine.battery_metrics();
-
-println!("Samples: {}", metrics.samples_processed);
-println!("CPU time: {} µs", metrics.cpu_time_us);
-println!("CPU %: {:.2}%", metrics.cpu_percent);
-println!("Power: {:.1} mW", metrics.power_mw);
-println!("Daily: {:.2} mWh", metrics.daily_mwh());
-println!("Battery impact: {:.2}%", metrics.battery_percent());
-
-// Check metrics
-if metrics.cpu_percent < 5.0 {
-    println!("Low CPU usage");
-}
-```
-
-## Sampling modes (with adaptive engine)
-
-The engine automatically adjusts sampling rates based on motion:
-
-```
-Still → 10 Hz
-Steady → 25 Hz
-Active → 50 Hz
-Transition → 100 Hz
-```
-
-Mode switching happens automatically with hysteresis to avoid rapid changes.
-
-## Error handling
-
-Always check validity:
+Check validity state:
 
 ```rust
 match window.validity_state {
-    ValidityState::Valid => {
-        // Trust this window fully
-        process_motion_event(window);
-    },
-    ValidityState::Degraded => {
-        // Reduce confidence or ignore
-        if window.confidence > 0.85 {
-            process_motion_event(window);
-        }
-    },
-    ValidityState::Invalid => {
-        // Skip completely
-        log_skip(window);
-    },
+    ValidityState::Valid => { /* use normally */ }
+    ValidityState::Degraded => { /* reduced confidence */ }
+    ValidityState::Invalid => { /* discard */ }
 }
 ```
 
-## Integration tips
+Check sensor health:
 
-1. **Feed continuously**: Engine expects steady 50Hz (or configured rate) IMU stream
-2. **Don't buffer**: Process samples immediately, let engine handle windowing
-3. **Trust confidence**: Use window.confidence to weight downstream decisions
-4. **Fail gracefully**: Invalid windows are rare; handle them by ignoring
-5. **Monitor battery**: Check metrics periodically, especially in long-running scenarios
-
-## Performance baseline
-
-- **Per-sample cost**: Microseconds (well below 1ms per window)
-- **Memory**: Fixed small footprint (no dynamic allocation in critical paths)
-- **Power**: Efficient background processing
-
----
-
-See [LIMITATIONS.md](LIMITATIONS.md) for what the engine can't do.  
-See [CONTRACT.md](CONTRACT.md) for guarantees and privacy boundaries.
+```rust
+match window.sensor_health {
+    SensorHealth::Nominal => { /* good */ }
+    SensorHealth::Degraded => { /* noisy */ }
+    SensorHealth::Critical => { /* unreliable */ }
+}
+```

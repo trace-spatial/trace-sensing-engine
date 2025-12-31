@@ -1,175 +1,70 @@
-# Sensing Engine — Contract
+# Contract
 
-This is what the library does and doesn't do.
+Interface contract for the sensing engine.
 
----
+## Input
 
-## Purpose
+| Field | Type | Unit |
+|-------|------|------|
+| timestamp_ms | u64 | milliseconds |
+| accel | [f32; 3] | m/s² |
+| gyro | [f32; 3] | rad/s |
+| mag (optional) | [f32; 3] | µT |
 
-Takes raw accelerometer and gyroscope data, produces structured motion evidence. Motion only. No decisions, interpretation, location, or identity.
+Assumptions:
+- Sample rate: 10-200 Hz (optimal: 50-100 Hz)
+- Sensors factory-calibrated
+- Timestamps monotonic
 
----
+## Output
 
-## What it provides
+### Binary Wire Format (Primary)
 
-- **Orientation handling**: Phone position doesn't matter—pocket, hand, bag, all work
-- **Transition detection**: Identifies stops, hesitations, resumes, turns
-- **Temporal accuracy**: Timestamps and durations are reliable
-- **Offline operation**: Works without network
-- **Uncertainty handling**: Every result includes confidence and data quality scores
-- **Clear failures**: Never silently guesses; marks unreliable data explicitly
+Pre-serialized buffer accessible via FFI:
+- `trace_get_wire_buffer()` — pointer to buffer
+- `trace_get_wire_buffer_len()` — current length
 
----
+Message types:
+- `0x01` TrajectoryUpdate (32 bytes)
+- `0x02` StepEvent (20 bytes)
+- `0x03` DisruptionEvent (64 bytes)
+- `0x04` TransportChange (12 bytes)
+- `0x05` SessionSummary (48 bytes)
 
-## What it does NOT do
+### JSON Export (Debug)
 
-- Determine location or coordinates
-- Build maps or recognize rooms
-- Identify users or fingerprint devices
-- Infer what you're doing or why
-- Use GPS, WiFi, Bluetooth, cameras, or microphones
-- Require cloud services
-- Keep raw sensor data after processing
-- Create motion signatures that could re-identify users
+Available via `trace_get_last_disruptions_json()` and `trace_export_session_json()`.
 
-These are architectural limits, not temporary limitations.
+## Guarantees
 
----
+- O(1) per-sample processing
+- Fixed memory footprint
+- No heap allocation on hot path (wire format)
+- No network calls
+- No filesystem access
+- Thread-unsafe (caller must synchronize)
 
-## Privacy: Built in, not bolted on
+## Does Not
 
-- Raw sensor data doesn't stick around
-- Data stays on device
-- Processed evidence can't be reversed back to original motion
-- No biometric signatures kept
-- Motion information degrades over time
-
-Even if other systems get compromised, the engine itself can't be used for tracking or surveillance.
-
----
-
-## What you need to provide
-
-- Accelerometer readings [x, y, z] in m/s²
-- Gyroscope readings [x, y, z] in rad/s
-- Timestamp in milliseconds
-
-The engine assumes:
-- Phone is being carried by a person
-- Data is coming in at roughly 50Hz (tolerates 10-200Hz)
-- Sensors are factory-calibrated (device bias removed)
-
-When these assumptions break, the engine marks the data as degraded or invalid.
-
----
-
-## What you get back
-
-Each motion evidence window contains:
-
-- Timeline of motion segments with confidence
-- State transitions where something changed
-- Duration bucketing (rough time grouping)
-- Sensor quality assessment
-- Validity flag (should you trust this?)
-- Overall confidence score
-
-Just facts. No interpretation or labels.
-
----
-
-## Data quality levels
-
-Every output is marked as one of:
-
-| Level | Meaning |
-|-------|---------|
-| **Valid** | Use it normally |
-| **Degraded** | Weak signal; use with reduced weight |
-| **Invalid** | Too noisy; skip it |
-
-The engine tells you which it is. No guessing.
-
----
-
-## What the engine knows and doesn't know
-
-**It knows:**
-- Raw sensor measurements
-- Motion physics
-- That's it
-
-**It doesn't know:**
-- Zone Mapper
-- Item ranking
-- Rooms or environments
-- User history
-- Trace application logic
-
-The engine connects to higher layers, never the other way around.
-
----
-
-## Design approach
-
-- Extract motion facts, let higher layers interpret
-- When in doubt, surface extra signals (higher layers filter)
-- Always mark uncertainty
-- Clear failure modes, never silent failures
-
----
-
-## Performance
-
-These are fixed requirements:
-
-- Processes each sample in microseconds (not milliseconds)
-- Uses fixed memory amount (doesn't grow over time)
-- Works as background process without draining resources
-- Completely offline, no internet needed
-- Safe on Android and iOS
-
-Any feature that breaks these stays out.
-
----
-
-## Testing
-
-Every claim is verified:
-
-- Full test coverage
-- Tested against noisy data, sensor errors, edge cases
-- Stress-tested with continuous input
-- Proven to handle NaN and Infinity gracefully
-- Zero silent failures in test suite
-
----
+- Store raw sensor data
+- Determine absolute location
+- Identify users
+- Use GPS/WiFi/Bluetooth
+- Require network connectivity
 
 ## Versioning
 
-Any change to:
-- What you pass in or get back (format)
-- What we promise (guarantees)
-- How privacy works (behavior)
-- How failures happen (semantics)
+Breaking changes increment major version:
+- Input format changes
+- Output format changes
+- Guarantee changes
 
-= Version change. No surprise updates.
+## Memory
 
----
+Caller owns:
+- TraceEngine instance (free with `trace_engine_destroy`)
+- Strings from `trace_export_session_json` (free with `trace_free_string`)
 
-## This is binding
-
-This contract is enforceable.
-
-Any implementation that breaks this is wrong. Performance, features, or convenience don't override this.
-
----
-
-## Summary
-
-**Input:** Raw 6-axis sensor data  
-**Output:** Motion facts with confidence levels  
-**Constraint:** Cannot be used for surveillance, by design  
-**Rule:** Extract truth, interpret later.
-
-No shortcuts. No exceptions.
+Engine owns:
+- Wire buffer (valid until next `trace_process_sample` call)
+- Disruption JSON pointer (valid until next call)
